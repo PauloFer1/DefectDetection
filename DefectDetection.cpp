@@ -123,7 +123,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	IplImage *img = cvCreateImage(cvSize(cameraWidth, cameraHeight), IPL_DEPTH_8U, 1);
 	//IplImage *imgRGB = cvCreateImage(cvSize(cameraWidth, cameraHeight), IPL_DEPTH_8U, 3);
 	Mat imgRGB;
-	imgRGB = Mat(cameraWidth, cameraHeight, CV_8UC3);
+	imgRGB = Mat(cameraHeight, cameraWidth, CV_8UC3);
 //	imgRGB = imread("img.jpg", 1);
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
@@ -156,6 +156,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			//cvCvtColor(img, imgRGB, CV_GRAY2BGR);
 			cvFlip(img, NULL, 1);
 			imgRGB.setTo(0);
+			memcpy(imgRGB.data, imageBuffer, sizeof(unsigned char)*cameraWidth*cameraHeight);
 			
 
 			for (int i = 0; i<frame->ObjectCount(); i++)
@@ -167,16 +168,24 @@ int _tmain(int argc, _TCHAR* argv[])
 
 				int a = cvRound(x);
 				int b = cvRound(y);
-				circle(imgRGB, cvPoint(cameraWidth-x, y), 20, CV_RGB(255, 0, 0));
+				circle(imgRGB, cvPoint(cameraWidth-x, y), obj->Width()/2, CV_RGB(255, 0, 0));
 				char c[30] = "P(";
 				char cx[5] = "100";
 				char cy[5] = "100";
+				char cw[5] = "";
+				char ch[5] = "";
 				sprintf_s(cx, "%d", a);
 				sprintf_s(cy, "%d", b);
+				sprintf_s(cw, "%d", obj->Width());
+				sprintf_s(ch, "%d", obj->Height());
 				strcat_s(c, cx);
 				strcat_s(c, ", ");
 				strcat_s(c, cy);
 				strcat_s(c, ")");
+				strcat_s(c,"-W:");
+				strcat_s(c, cw);
+				strcat_s(c, ", H:");
+				strcat_s(c, ch);
 				//putText(imgRGB, c, cvPoint(x, y), 1,1, cvScalar(255.0, 0.0, 0.0, 0.0));
 				//flip(imgRGB, imgRGB, 1);
 				putText(imgRGB, c, cvPoint(cameraWidth-a, b-20), FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(0, 250, 0), 1, CV_AA);
