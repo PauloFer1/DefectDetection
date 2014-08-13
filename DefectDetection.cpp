@@ -26,20 +26,30 @@ int slider;
 int intensity;
 int slider2;
 int cameraCount = 0;
+cModuleSync * sync = new cModuleSync();
 
 
 //************COMMON FUNCTIONS
 void changeExp(int, void*)
 {
-	camera[0]->SetExposure(exposure);
+	for (int i = 0; i < cameraCount; i++)
+	{
+		camera[i]->SetExposure(exposure);
+	}
 }
 void changeInt(int, void*)
 {
-	camera[0]->SetIntensity(intensity);
+	for (int i = 0; i < cameraCount; i++)
+	{
+		camera[i]->SetIntensity(intensity);
+	}
 }
 void changeThre(int, void*)
 {
-	camera[0]->SetThreshold(thresholdVal);
+	for (int i = 0; i < cameraCount; i++)
+	{
+		camera[i]->SetThreshold(thresholdVal);
+	}
 }
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -60,30 +70,33 @@ int _tmain(int argc, _TCHAR* argv[])
 		printf("complete\n\n");
 	else
 		printf("failed\n\n");
-
-	CameraList list;
-	printf("%d", list.Count());
-	for (int i = 0; i < list.Count(); i++)
 	{
-		printf("Device %d: %s", i, list[i].Name());
-		camera[i] = CameraManager::X().GetCamera(list[i].UID());
-		if (camera[i] == 0)
-			printf("Unable to connect camera...");
-		else
+		CameraList list;
+		CameraManager::X().GetCameraList(list);
+		char l[5] = "";
+		sprintf_s(l, "%d", list.Count());
+		MessageBox(0, l, "List Count", MB_OK);
+		for (int i = 0; i < list.Count(); i++)
 		{
-			
-			cameraCount++;
-		}
+			printf("Device %d: %s", i, list[i].Name());
+			camera[i] = CameraManager::X().GetCamera(list[i].UID());
+			if (camera[i] == 0)
+				printf("Unable to connect camera...");
+			else
+			{
 
+				cameraCount++;
+			}
+
+		}
 	}
-	
-	/*if (cameraCount == 0)
+	if (cameraCount == 0)
 	{
 		MessageBox(0, "Please connect a camera", "No Device Connected", MB_OK);
 		CameraManager::X().Shutdown();
 		return 1;
-	}*/
-	camera[0] = CameraManager::X().GetCamera();
+	}
+//	camera[0] = CameraManager::X().GetCamera();
 	int cameraWidth = camera[0]->Width();
 	int cameraHeight = camera[0]->Height();
 	std::cout << camera[0]->Exposure();
@@ -92,7 +105,12 @@ int _tmain(int argc, _TCHAR* argv[])
 	thresholdVal = int(camera[0]->Threshold());
 
 	uchar imageBuffer[800 * 600];
+	uchar imageBuffer2[800 * 600];
 
+	for (int i = 0; i < cameraCount; i++)
+	{
+		sync->AddCamera(camera[i]);
+	}
 
 	for (int i = 0; i < cameraCount; i++)
 	{
@@ -101,10 +119,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		camera[i]->Start();
 		camera[i]->SetTextOverlay(false);
 	}
-	camera[0]->SetVideoType(SegmentMode);
-	//camera->SetVideoType(MJPEGMode);
-	camera[0]->Start();
-	camera[0]->SetTextOverlay(false);
 	
 
 	Core::DistortionModel lensDistortion;
@@ -112,6 +126,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	//************ WINDOW **************
 	namedWindow("IRTRACK", CV_WINDOW_AUTOSIZE);
+	//namedWindow("BLOB2", CV_WINDOW_AUTOSIZE);
 	namedWindow("BLOB", CV_WINDOW_AUTOSIZE);
 	createTrackbar("THRESHOLD", "IRTRACK", &thresholdVal, camera[0]->MaximumThreshold(), changeThre);
 	createTrackbar("INTENSITY", "IRTRACK", &intensity, camera[0]->MaximumIntensity(), changeInt);
@@ -121,9 +136,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	//************ @WINDOW **************
 	//*************IMAGE ***************
 	IplImage *img = cvCreateImage(cvSize(cameraWidth, cameraHeight), IPL_DEPTH_8U, 1);
+	IplImage *img2 = cvCreateImage(cvSize(cameraWidth, cameraHeight), IPL_DEPTH_8U, 1);
 	//IplImage *imgRGB = cvCreateImage(cvSize(cameraWidth, cameraHeight), IPL_DEPTH_8U, 3);
 	Mat imgRGB;
-	imgRGB = Mat(cameraHeight, cameraWidth, CV_8UC3);
+	imgRGB = Mat(cameraHeight, cameraWidth*2, CV_8UC3);
 //	imgRGB = imread("img.jpg", 1);
 	vector<vector<Point> > contours;
 	vector<Vec4i> hierarchy;
@@ -146,58 +162,78 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while (1)
 	{	
-		Frame *frame = camera[0]->GetFrame();
-		if (frame)
+		//Frame *frame = camera[0]->GetFrame();
+		//Frame *frame2 = camera[1]->GetFrame();
+		FrameGroup *frameGroup = sync->GetFrameGroup();
+
+
+			//if (frame)
+		if (frameGroup)
 		{
-			frame->Rasterize(cameraWidth, cameraHeight, cameraWidth, 8, imageBuffer);
-
-			img->imageData=(char *)imageBuffer;
-			//imgRGB.data = imageBuffer;
-			//cvCvtColor(img, imgRGB, CV_GRAY2BGR);
-			cvFlip(img, NULL, 1);
 			imgRGB.setTo(0);
-			memcpy(imgRGB.data, imageBuffer, sizeof(unsigned char)*cameraWidth*cameraHeight);
-			
-
-			for (int i = 0; i<frame->ObjectCount(); i++)
+			for (int k = 0; k<frameGroup->Count(); k++)
 			{
-				cObject *obj = frame->Object(i);
+				Frame * frame = frameGroup->GetFrame(k);
+				
+				frame->Rasterize(cameraWidth, cameraHeight, cameraWidth, 8, imageBuffer);
 
-				float x = obj->X();
-				float y = obj->Y();
+				img->imageData = (char *)imageBuffer;
+				//imgRGB.data = imageBuffer;
+				//cvCvtColor(img, imgRGB, CV_GRAY2BGR);
+				cvFlip(img, NULL, 1);
+				
+				//memcpy(imgRGB.data, imageBuffer, sizeof(unsigned char)*(cameraWidth*2)*cameraHeight);
 
-				int a = cvRound(x);
-				int b = cvRound(y);
-				circle(imgRGB, cvPoint(cameraWidth-x, y), obj->Width()/2, CV_RGB(255, 0, 0));
-				char c[30] = "P(";
-				char cx[5] = "100";
-				char cy[5] = "100";
-				char cw[5] = "";
-				char ch[5] = "";
-				sprintf_s(cx, "%d", a);
-				sprintf_s(cy, "%d", b);
-				sprintf_s(cw, "%d", obj->Width());
-				sprintf_s(ch, "%d", obj->Height());
-				strcat_s(c, cx);
-				strcat_s(c, ", ");
-				strcat_s(c, cy);
-				strcat_s(c, ")");
-				strcat_s(c,"-W:");
-				strcat_s(c, cw);
-				strcat_s(c, ", H:");
-				strcat_s(c, ch);
-				//putText(imgRGB, c, cvPoint(x, y), 1,1, cvScalar(255.0, 0.0, 0.0, 0.0));
-				//flip(imgRGB, imgRGB, 1);
-				putText(imgRGB, c, cvPoint(cameraWidth-a, b-20), FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(0, 250, 0), 1, CV_AA);
 
-				Core::Undistort2DPoint(lensDistortion, x, y);
+				for (int i = 0; i < frame->ObjectCount(); i++)
+				{
+					cObject *obj = frame->Object(i);
+
+					float x = obj->X();
+					float y = obj->Y();
+
+				//	printf("  - Camera #%d is reporting %d 2D objects on ( %f , %f )\n", k, frame->ObjectCount(), x, y);
+
+					int a = (k*cameraWidth)+(cameraWidth - cvRound(x));
+					int b = cvRound(y);
+					circle(imgRGB, cvPoint(a, y), obj->Width() / 2, CV_RGB(255, 0, 0));
+					char c[30] = "P";
+					char c2[30] = "";
+					char c3[30] = "(";
+					char cx[5] = "100";
+					char cy[5] = "100";
+					char cw[5] = "";
+					char ch[5] = "";
+					sprintf_s(c2, "%d", k);
+					sprintf_s(cx, "%d", a);
+					sprintf_s(cy, "%d", b);
+					sprintf_s(cw, "%d", obj->Width());
+					sprintf_s(ch, "%d", obj->Height());
+					strcat_s(c, c2);
+					strcat_s(c, c3);
+					strcat_s(c, cx);
+					strcat_s(c, ", ");
+					strcat_s(c, cy);
+					strcat_s(c, ")");
+					strcat_s(c, "-W:");
+					strcat_s(c, cw);
+					strcat_s(c, ", H:");
+					strcat_s(c, ch);
+					//putText(imgRGB, c, cvPoint(x, y), 1,1, cvScalar(255.0, 0.0, 0.0, 0.0));
+					//flip(imgRGB, imgRGB, 1);
+					putText(imgRGB, c, cvPoint(a, b - 20), FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(0, 250, 0), 1, CV_AA);
+
+					Core::Undistort2DPoint(lensDistortion, x, y);
+				}
+				frame->Release();
 			}
-			frame->Release();
+			frameGroup->Release();
 		}
-		//Sleep(2);
+		Sleep(2);
 
 		//»»»»»»»»»»»»» WINDOW 
 		cvShowImage("BLOB", img);
+	//	cvShowImage("BLOB2", img2);
 		imshow("IRTRACK", imgRGB);
 	//	imshow("CONTOUR", drawing);
 	//	imshow("CONTOUR2", canny_output);
